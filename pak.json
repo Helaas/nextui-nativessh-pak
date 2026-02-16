@@ -1,0 +1,13 @@
+{
+  "name": "Native SSH",
+  "version": "v1.0.0",
+  "type": "TOOL",
+  "description": "Enable and disable SSH access on your device. Displays IP address and port when SSH is active.",
+  "author": "Helaas",
+  "repo_url": "https://github.com/Helaas/nextui-nativessh-pak",
+  "release_filename": "NativeSSH.pakz",
+  "platforms": [
+    "tg5040",
+    "tg5050"
+  ]
+}
