@@ -598,17 +598,32 @@ static screen_action show_status_screen(bool ssh_running) {
         { .key = "Password", .value = SSH_DEFAULT_PASSWORD },
     };
 
-    ap_detail_section section = {
+    ap_detail_section status_section = {
         .type = AP_SECTION_INFO,
         .title = "SSH",
     };
+    ap_detail_section warning_section = {
+        .type = AP_SECTION_DESCRIPTION,
+        .title = "Warning",
+        .description =
+            "The credentials shown here are stock defaults. Other custom firmware "
+            "or manual SSH setup can change the username and password.",
+    };
+    ap_detail_section enabled_sections[2];
+    ap_detail_section *sections = &status_section;
+    int section_count = 1;
 
     if (ssh_running) {
-        section.info_pairs = pairs_enabled;
-        section.info_count = sizeof(pairs_enabled) / sizeof(pairs_enabled[0]);
+        status_section.info_pairs = pairs_enabled;
+        status_section.info_count = sizeof(pairs_enabled) / sizeof(pairs_enabled[0]);
+
+        enabled_sections[0] = status_section;
+        enabled_sections[1] = warning_section;
+        sections = enabled_sections;
+        section_count = 2;
     } else {
-        section.info_pairs = pairs_disabled;
-        section.info_count = sizeof(pairs_disabled) / sizeof(pairs_disabled[0]);
+        status_section.info_pairs = pairs_disabled;
+        status_section.info_count = sizeof(pairs_disabled) / sizeof(pairs_disabled[0]);
     }
 
     ap_footer_item footer[] = {
@@ -621,8 +636,8 @@ static screen_action show_status_screen(bool ssh_running) {
 
     ap_detail_opts opts = {
         .title = "Native SSH",
-        .sections = &section,
-        .section_count = 1,
+        .sections = sections,
+        .section_count = section_count,
         .footer = footer,
         .footer_count = 2,
         .center_title = true,
