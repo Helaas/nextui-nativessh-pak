@@ -1,18 +1,5 @@
 # Build output
 build/
 
-# Vendored dependencies (regenerate with: make deps)
-vendor/
-
-# Docker/Go build cache
-.cache/
-
 # macOS
 .DS_Store
-
-# Logs
-*.log
-
-# Binaries
-nativessh
-*.exe

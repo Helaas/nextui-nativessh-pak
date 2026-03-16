@@ -1,13 +1,18 @@
 {
   "name": "Native SSH",
-  "version": "v1.0.0",
+  "version": "v2.0.0",
   "type": "TOOL",
-  "description": "Enable and disable SSH access on your device. Displays IP address and port when SSH is active.",
+  "description": "Enable and disable SSH access on your device. Displays default IP address and port when SSH is active.",
   "author": "Helaas",
   "repo_url": "https://github.com/Helaas/nextui-nativessh-pak",
   "release_filename": "NativeSSH.pakz",
+  "changelog": {
+    "v2.0.0": "Add Miyoo Flip support. Major rework porting to app from Gabagool to Apostrophe.",
+    "v1.0.0": "Initial release"
+  },
   "platforms": [
     "tg5040",
-    "tg5050"
+    "tg5050",
+    "my355"
   ]
 }

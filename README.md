@@ -8,26 +8,24 @@ Enable and disable the built-in SSH server on **NextUI** handhelds directly from
 |----------|--------|-------|
 | `tg5040` | TrimUI Brick, TrimUI Smart Pro | Docker (ARM64) |
 | `tg5050` | TrimUI Smart Pro S | Docker (ARM64) |
+| `my355` | Miyoo Flip | Docker (ARM64) |
 | `mac` | macOS (local testing) | Native |
 
 ## Requirements
 
-- **TG5040**: Stock OS **1.1.1** or higher (the Pak will warn you if your OS is too old)
+- **TG5040**: Stock OS **1.1.1** or higher
+- **MY355**: Firmware **v250228** or higher
 - **TG5050**: Any stock OS version
 
-## What It Does
+The Pak will warn you at launch if your firmware is too old.
 
-- Toggles the native SSH setting via `systemval enablessh`
-- Starts and stops the `sshd` daemon
-- Polls to confirm the service is actually running before showing connection info
-- Displays status, IP address, port, and default password
-
-### Default Credentials
+## Default Credentials
 
 | Platform | User | Password |
 |----------|------|----------|
 | TG5040 | `root` | `tina` |
 | TG5050 | `root` | *(empty — no password)* |
+| MY355 | `root` | `rockchip` |
 
 ## Usage
 
@@ -39,49 +37,46 @@ Enable and disable the built-in SSH server on **NextUI** handhelds directly from
    ```
 4. Press **B** to quit
 
+On device platforms (**TG5040**, **TG5050**, and **MY355**), Native SSH persists the chosen SSH state across reboots by managing a small block inside NextUI's `auto.sh` startup script.
+
 ## Building
 
 ### Prerequisites
 
 **macOS (development):**
 ```bash
-brew install go sdl2 sdl2_ttf sdl2_image sdl2_gfx
+brew install sdl2 sdl2_ttf sdl2_image
 ```
 
-**Embedded (tg5040/tg5050):**
-- Docker with ARM64 support
+**Embedded (tg5040/tg5050/my355):**
+- Docker
 
 ### First-Time Setup
 
-After cloning, fetch and patch vendored dependencies:
+After cloning, initialise the Apostrophe submodule:
 ```bash
-make deps
+git submodule update --init
 ```
-
-This runs `go mod vendor` and applies the TG5050 power button patch to Gabagool automatically.
 
 ### Build Commands
 
 ```bash
-# Auto-detect platform and build
-make
-
-# Build for specific platform
+# Build for macOS (development)
 make mac
+
+# Build for a specific device
 make tg5040
 make tg5050
+make my355
 
-# Build for all embedded platforms
-make embedded
+# Build all device platforms
+make all
 
-# Package as .pak bundles for NextUI
+# Package all platforms (.pak.zip + .pakz)
 make package
 
-# Export TrimUI .pakz (Tools/tg5040 + Tools/tg5050 layout)
-make export-trimui
-
-# Update dependencies and re-apply patches
-make deps
+# Deploy to connected device via ADB (auto-detects platform)
+make deploy
 
 # See all targets
 make help
@@ -91,23 +86,23 @@ make help
 
 | Target | Output |
 |--------|--------|
-| macOS | `build/nativessh` |
+| macOS | `build/mac/nativessh` |
 | tg5040 | `build/release/tg5040/NativeSSH.pak.zip` |
 | tg5050 | `build/release/tg5050/NativeSSH.pak.zip` |
-| export-trimui | `build/release/trimui/NativeSSH.pakz` |
-
-The `.pak.zip` includes the binary, `launch.sh`, `pak.json`, `LICENSE`, and required shared libraries (`libSDL2_gfx`).
+| my355 | `build/release/my355/NativeSSH.pak.zip` |
+| package | `build/release/all/NativeSSH.pakz` |
 
 ## Installing on a Handheld
 
-1. Build and package: `make package` or `make export-trimui`
-2. If using `make package`, extract `NativeSSH.pak.zip` to your SD card as `Tools/{platform}/NativeSSH.pak/`
-3. If using `make export-trimui`, place `NativeSSH.pakz` in the root of your SD card; NextUI will auto-install it upon (re)boot
-4. Launch from the NextUI Tools menu
+1. Build and package: `make package`
+2. Place `NativeSSH.pakz` in the root of your SD card; NextUI will auto-install it upon (re)boot
+3. Launch from the NextUI Tools menu
+
+Or deploy directly via ADB: `make deploy`
 
 ## Acknowledgements
 
-Built with [Gabagool](https://github.com/BrandonKowalski/gabagool) — a UI framework for embedded Linux handhelds by [@BrandonKowalski](https://github.com/BrandonKowalski).
+Built with [Apostrophe](https://github.com/Helaas/Apostrophe) — a UI library for NextUI Paks.
 
 ## License
 
