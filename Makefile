@@ -19,13 +19,14 @@ ADB ?= adb
 
 COMMON_INCLUDES := -I$(APOSTROPHE_DIR)/include
 
-.PHONY: all native mac tg5040 tg5050 my355 \
+.PHONY: all native mac run-mac run-native tg5040 tg5050 my355 \
 	package package-tg5040 package-tg5050 package-my355 do-package \
 	deploy deploy-platform clean help
 
 # ── Default target ──────────────────────────────────────────
 
 native: mac
+run-native: run-mac
 all: tg5040 tg5050 my355
 
 # ── Native macOS build ──────────────────────────────────────
@@ -40,6 +41,9 @@ mac:
 		$(SRC_FILES) \
 		$(shell pkg-config --libs sdl2 SDL2_ttf SDL2_image) \
 		-lm -lpthread
+
+run-mac: mac
+	./$(BUILD_DIR)/mac/$(APP_NAME)
 
 # ── Docker cross-compilation ────────────────────────────────
 
@@ -163,8 +167,10 @@ clean:
 help:
 	@echo "Targets:"
 	@echo "  native        Build the mac development binary"
+	@echo "  run-native    Build and run the mac binary (set AP_WINDOW_WIDTH/AP_WINDOW_HEIGHT to test sizes)"
 	@echo "  all           Build tg5040, tg5050, and my355"
 	@echo "  mac           Build for macOS (native)"
+	@echo "  run-mac       Build and run for macOS"
 	@echo "  tg5040        Build for TG5040 (Docker cross-compile)"
 	@echo "  tg5050        Build for TG5050 (Docker cross-compile)"
 	@echo "  my355         Build for Miyoo Flip (Docker cross-compile)"

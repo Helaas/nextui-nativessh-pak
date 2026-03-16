@@ -95,31 +95,6 @@ static bool is_ssh_running(void) {
     return system(SSH_CHECK_CMD) == 0;
 }
 
-#define FONT_SIZE_BUMP 1
-
-static void bump_font_size(int bump) {
-    if (bump == 0 || !ap__g.theme.font_path[0])
-        return;
-
-    for (int i = 0; i < AP_FONT_TIER_COUNT; i++) {
-        int base = ap__font_base_sizes[i] + bump;
-        int size;
-        TTF_Font *reloaded;
-
-        if (base < 1)
-            base = 1;
-
-        size = ap_font_size_for_resolution(base);
-        reloaded = ap__open_font(ap__g.theme.font_path, size);
-        if (!reloaded)
-            continue;
-
-        if (ap__g.fonts[i])
-            TTF_CloseFont(ap__g.fonts[i]);
-        ap__g.fonts[i] = reloaded;
-    }
-}
-
 #if !defined(PLATFORM_MAC)
 static const char *get_env_or_default(const char *name, const char *fallback) {
     const char *value = getenv(name);
@@ -529,7 +504,7 @@ static bool check_os_version(void) {
 #endif
 
 /* ---------------------------------------------------------------------------
- * SSH toggle (runs in background thread via ap_process_message)
+ * SSH toggle (runs in background thread)
  * ------------------------------------------------------------------------- */
 
 static void run_cmd(const char *cmd) {
@@ -642,6 +617,7 @@ static screen_action show_status_screen(bool ssh_running) {
     };
 
     ap_color key_col = ap_get_theme()->text;
+    TTF_Font *medium_font = ap_get_font(AP_FONT_MEDIUM);
 
     ap_detail_opts opts = {
         .title = "Native SSH",
@@ -652,6 +628,9 @@ static screen_action show_status_screen(bool ssh_running) {
         .center_title = true,
         .show_section_separator = true,
         .key_color = &key_col,
+        .body_font = medium_font,
+        .section_title_font = medium_font,
+        .key_font = medium_font,
     };
 
     ap_detail_result result;
@@ -701,8 +680,6 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Failed to initialise Apostrophe: %s\n", ap_get_error());
         return 1;
     }
-
-    bump_font_size(FONT_SIZE_BUMP);
 
 #if NEEDS_VERSION_CHECK
     if (!check_os_version()) {
