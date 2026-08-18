@@ -9,7 +9,7 @@ PAK_NAME := NativeSSH
 APOSTROPHE_DIR := third_party/apostrophe
 BUILD_DIR := build
 DIST_DIR := $(BUILD_DIR)/release
-STAGING_DIR := $(BUILD_DIR)/staging
+RELEASE_FILENAME := NativeSSH.pak.zip
 SRC_FILES := $(shell find src -name '*.c' -print | sort)
 
 TG5040_TOOLCHAIN := ghcr.io/loveretro/tg5040-toolchain:latest
@@ -90,14 +90,10 @@ package-my355: my355
 	@$(MAKE) do-package PLATFORM=my355 BIN_SRC=$(BUILD_DIR)/my355/$(APP_NAME)
 
 package-universal: universal
-	@set -e; for platform in tg5040 tg5050 my355 h700; do \
-		$(MAKE) do-package PLATFORM=$$platform BIN_SRC=$(BUILD_DIR)/universal/$(APP_NAME); \
-	done
-	@set -e; for platform in tg5040 tg5050 my355 h700; do \
-		cmp -s "$(BUILD_DIR)/universal/$(APP_NAME)" \
-			"$(BUILD_DIR)/$$platform/$(PAK_NAME).pak/$(APP_NAME)"; \
-	done
-	@echo "Verified one identical device binary in all four package trees."
+	@$(MAKE) do-package PLATFORM=universal BIN_SRC=$(BUILD_DIR)/universal/$(APP_NAME)
+	@cmp -s "$(BUILD_DIR)/universal/$(APP_NAME)" \
+		"$(BUILD_DIR)/universal/$(PAK_NAME).pak/$(APP_NAME)"
+	@echo "Verified the packaged universal device binary."
 
 do-package:
 	@if [ -z "$(PLATFORM)" ] || [ -z "$(BIN_SRC)" ]; then \
@@ -114,17 +110,13 @@ do-package:
 	fi
 	@mkdir -p $(DIST_DIR)/$(PLATFORM)
 	@rm -f $(DIST_DIR)/$(PLATFORM)/$(PAK_NAME).pak.zip
-	@cd $(BUILD_DIR)/$(PLATFORM) && zip -r "$(CURDIR)/$(DIST_DIR)/$(PLATFORM)/$(PAK_NAME).pak.zip" "$(PAK_NAME).pak" -x '.*'
+	@cd $(BUILD_DIR)/$(PLATFORM)/$(PAK_NAME).pak && zip -r "$(CURDIR)/$(DIST_DIR)/$(PLATFORM)/$(PAK_NAME).pak.zip" . -x '.*'
 
 package: package-universal
-	@rm -rf $(STAGING_DIR)
-	@for platform in tg5040 tg5050 my355 h700; do \
-		mkdir -p "$(STAGING_DIR)/Tools/$$platform"; \
-		cp -a "$(BUILD_DIR)/$$platform/$(PAK_NAME).pak" "$(STAGING_DIR)/Tools/$$platform/"; \
-	done
 	@mkdir -p $(DIST_DIR)/all
-	@rm -f $(DIST_DIR)/all/$(PAK_NAME).pakz
-	@cd $(STAGING_DIR) && zip -9 -r "$(CURDIR)/$(DIST_DIR)/all/$(PAK_NAME).pakz" . -x '.*'
+	@rm -f $(DIST_DIR)/all/$(RELEASE_FILENAME) $(DIST_DIR)/all/$(PAK_NAME).pakz
+	@cp $(DIST_DIR)/universal/$(PAK_NAME).pak.zip $(DIST_DIR)/all/$(RELEASE_FILENAME)
+	@unzip -Z1 $(DIST_DIR)/all/$(RELEASE_FILENAME) | grep -qx "$(APP_NAME)"
 
 package-matrix: package-tg5040 package-tg5050 package-my355
 
@@ -181,7 +173,7 @@ deploy-platform:
 	PAK_DIR="$$PAK_ROOT/$(PAK_NAME).pak"; \
 	echo "Deploying $(PAK_NAME).pak to $$PAK_DIR..."; \
 	$$ADB_CMD shell "rm -rf '$$PAK_DIR' && mkdir -p '$$PAK_ROOT'"; \
-	$$ADB_CMD push "$(BUILD_DIR)/$(PLATFORM)/$(PAK_NAME).pak" "$$PAK_ROOT/"; \
+	$$ADB_CMD push "$(BUILD_DIR)/universal/$(PAK_NAME).pak" "$$PAK_ROOT/"; \
 	echo "Deploy complete."
 
 # ── Cleanup ─────────────────────────────────────────────────
@@ -202,7 +194,7 @@ help:
 	@echo "  tg5050        Build for TG5050 (Docker cross-compile)"
 	@echo "  my355         Build for Miyoo Flip (Docker cross-compile)"
 	@echo "  universal     Build once for tg5040, tg5050, my355, and h700"
-	@echo "  package       Package one binary for all four platforms"
+	@echo "  package       Build the platform-neutral Pak Store archive"
 	@echo "  package-matrix  Build the legacy three-toolchain regression matrix"
 	@echo "  deploy        Detect adb platform, package, and push"
 	@echo "  clean         Remove build artifacts"

@@ -76,7 +76,7 @@ make tg5040
 make tg5050
 make my355
 
-# Copy the universal binary into all four platform trees and build the .pakz
+# Build one platform-neutral Pak Store archive
 make package
 
 # Deploy to connected device via ADB (auto-detects platform)
@@ -95,12 +95,12 @@ make help
 | tg5040 | `build/release/tg5040/NativeSSH.pak.zip` |
 | tg5050 | `build/release/tg5050/NativeSSH.pak.zip` |
 | my355 | `build/release/my355/NativeSSH.pak.zip` |
-| package | `build/release/all/NativeSSH.pakz` |
+| package | `build/release/all/NativeSSH.pak.zip` |
 
 ## Installing on a Handheld
 
 1. Build and package: `make package`
-2. Place `NativeSSH.pakz` in the root of your SD card; NextUI will auto-install it upon (re)boot
+2. Install `NativeSSH.pak.zip` through Pak Store, or extract its contents into `Tools/<platform>/NativeSSH.pak`
 3. Launch from the NextUI Tools menu
 
 Or deploy directly via ADB: `make deploy`
