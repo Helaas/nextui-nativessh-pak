@@ -9,6 +9,7 @@ Enable and disable the built-in SSH server on **NextUI** handhelds directly from
 | `tg5040` | TrimUI Brick, TrimUI Smart Pro | Docker (ARM64) |
 | `tg5050` | TrimUI Smart Pro S | Docker (ARM64) |
 | `my355` | Miyoo Flip | Docker (ARM64) |
+| `h700` | Anbernic H700 devices running BaseOS | Docker (ARM64) |
 | `mac` | macOS (local testing) | Native |
 
 ## Requirements
@@ -16,6 +17,7 @@ Enable and disable the built-in SSH server on **NextUI** handhelds directly from
 - **TG5040**: Stock OS **1.1.1** or higher
 - **MY355**: Firmware **v250228** or higher
 - **TG5050**: Any stock OS version
+- **H700**: BaseOS (SSH is enabled by default)
 
 The Pak will warn you at launch if your firmware is too old.
 
@@ -26,6 +28,7 @@ The Pak will warn you at launch if your firmware is too old.
 | TG5040 | `root` | `tina` |
 | TG5050 | `root` | *(empty — no password)* |
 | MY355 | `root` | `rockchip` |
+| H700 | `root` | `root` |
 
 ## Usage
 
@@ -37,7 +40,7 @@ The Pak will warn you at launch if your firmware is too old.
    ```
 4. Press **B** to quit
 
-On device platforms (**TG5040**, **TG5050**, and **MY355**), Native SSH persists the chosen SSH state across reboots by managing a small block inside NextUI's `auto.sh` startup script.
+On device platforms (**TG5040**, **TG5050**, **MY355**, and **H700**), Native SSH persists the chosen SSH state across reboots by managing a small block inside NextUI's `auto.sh` startup script.
 
 ## Building
 
@@ -48,7 +51,7 @@ On device platforms (**TG5040**, **TG5050**, and **MY355**), Native SSH persists
 brew install sdl2 sdl2_ttf sdl2_image
 ```
 
-**Embedded (tg5040/tg5050/my355):**
+**Embedded (tg5040/tg5050/my355/h700):**
 - Docker
 
 ### First-Time Setup
@@ -64,15 +67,16 @@ git submodule update --init
 # Build for macOS (development)
 make mac
 
-# Build for a specific device
+# Build one binary for every supported NextUI device
+make universal
+make all
+
+# Optional legacy regression builds
 make tg5040
 make tg5050
 make my355
 
-# Build all device platforms
-make all
-
-# Package all platforms (.pak.zip + .pakz)
+# Copy the universal binary into all four platform trees and build the .pakz
 make package
 
 # Deploy to connected device via ADB (auto-detects platform)
@@ -87,6 +91,7 @@ make help
 | Target | Output |
 |--------|--------|
 | macOS | `build/mac/nativessh` |
+| universal | `build/universal/nativessh` |
 | tg5040 | `build/release/tg5040/NativeSSH.pak.zip` |
 | tg5050 | `build/release/tg5050/NativeSSH.pak.zip` |
 | my355 | `build/release/my355/NativeSSH.pak.zip` |
