@@ -4,6 +4,7 @@ CROSS_COMPILE ?= aarch64-nextui-linux-gnu-
 CC := $(CROSS_COMPILE)gcc
 STRIP := $(CROSS_COMPILE)strip
 SRC := $(shell find /workspace/src -name '*.c' -print | sort)
+HDR := $(wildcard /workspace/third_party/apostrophe/include/*.h) /workspace/ports/tg5050/Makefile
 INCLUDES := -I/workspace/third_party/apostrophe/include
 PKG_CONFIG := pkg-config
 SDL_CFLAGS := $(shell $(PKG_CONFIG) --cflags sdl2)
@@ -19,7 +20,7 @@ LDFLAGS := $(SDL_LDFLAGS) -Wl,--gc-sections -lpthread -lm
 
 all: $(BUILD_DIR)/nativessh
 
-$(BUILD_DIR)/nativessh: $(SRC)
+$(BUILD_DIR)/nativessh: $(SRC) $(HDR)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $(SRC) $(LDFLAGS)
 	$(STRIP) $@

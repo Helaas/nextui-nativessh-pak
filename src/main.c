@@ -15,87 +15,88 @@
 #include <unistd.h>
 
 /* ---------------------------------------------------------------------------
- * Platform-specific constants (set via -DPLATFORM_xxx compiler flag)
+ * Runtime platform configuration
  * ------------------------------------------------------------------------- */
 
-#if defined(PLATFORM_TG5040)
-    #define SSH_CHECK_CMD        "pidof sshd > /dev/null 2>&1"
-    #define SSH_ENABLE_CMD       "/usr/trimui/bin/systemval enablessh 1"
-    #define SSH_START_CMD        "/usr/sbin/sshd"
-    #define SSH_DISABLE_CMD      "/usr/trimui/bin/systemval enablessh 0"
-    #define SSH_STOP_CMD         "killall -9 sshd"
-    #define SSH_DEFAULT_PASSWORD "tina"
-    #define VERSION_FILE         "/etc/version"
-    #define MIN_VERSION          "1.1.1"
-    #define NEEDS_VERSION_CHECK  1
-    #define VERSION_FORMAT_DOT   1
-    #define VERSION_FORMAT_DATE  0
-#elif defined(PLATFORM_TG5050)
-    #define SSH_CHECK_CMD        "pidof sshd > /dev/null 2>&1"
-    #define SSH_ENABLE_CMD       "/usr/trimui/bin/systemval enablessh 1"
-    #define SSH_START_CMD        "/usr/sbin/sshd"
-    #define SSH_DISABLE_CMD      "/usr/trimui/bin/systemval enablessh 0"
-    #define SSH_STOP_CMD         "killall -9 sshd"
-    #define SSH_DEFAULT_PASSWORD "(empty - no password)"
-    #define NEEDS_VERSION_CHECK  0
-    #define VERSION_FORMAT_DOT   0
-    #define VERSION_FORMAT_DATE  0
-#elif defined(PLATFORM_MY355)
-    #define SSH_CHECK_CMD        "pidof dropbear > /dev/null 2>&1"
-    #define SSH_ENABLE_CMD       "/etc/init.d/S50dropbear start"
-    #define SSH_START_CMD        NULL
-    #define SSH_DISABLE_CMD      "/etc/init.d/S50dropbear stop"
-    #define SSH_STOP_CMD         "killall dropbear"
-    #define SSH_DEFAULT_PASSWORD "rockchip"
-    #define VERSION_FILE         "/usr/miyoo/version"
-    #define MIN_VERSION          "20250228"
-    #define NEEDS_VERSION_CHECK  1
-    #define VERSION_FORMAT_DOT   0
-    #define VERSION_FORMAT_DATE  1
-#elif defined(PLATFORM_MAC)
-    #define SSH_CHECK_CMD        "pgrep -x sshd > /dev/null 2>&1"
-    #define SSH_ENABLE_CMD       NULL
-    #define SSH_START_CMD        NULL
-    #define SSH_DISABLE_CMD      NULL
-    #define SSH_STOP_CMD         NULL
-    #define SSH_DEFAULT_PASSWORD "tina"
-    #define NEEDS_VERSION_CHECK  0
-    #define VERSION_FORMAT_DOT   0
-    #define VERSION_FORMAT_DATE  0
-#else
-    #error "No platform defined. Use -DPLATFORM_TG5040, -DPLATFORM_TG5050, -DPLATFORM_MY355, or -DPLATFORM_MAC"
-#endif
+typedef enum {
+    VERSION_NONE,
+    VERSION_DOT,
+    VERSION_DATE,
+} version_format;
+
+typedef struct {
+    const char *check_cmd;
+    const char *enable_cmd;
+    const char *start_cmd;
+    const char *disable_cmd;
+    const char *stop_cmd;
+    const char *default_password;
+    const char *userdata_root;
+    const char *version_file;
+    const char *min_version;
+    version_format version_format;
+} ssh_platform_config;
+
+static const ssh_platform_config *platform_config(void) {
+    static const ssh_platform_config tg5040 = {
+        "pidof sshd > /dev/null 2>&1",
+        "/usr/trimui/bin/systemval enablessh 1", "/usr/sbin/sshd",
+        "/usr/trimui/bin/systemval enablessh 0", "killall -9 sshd",
+        "tina", "/mnt/SDCARD/.userdata/tg5040", "/etc/version", "1.1.1", VERSION_DOT,
+    };
+    static const ssh_platform_config tg5050 = {
+        "pidof sshd > /dev/null 2>&1",
+        "/usr/trimui/bin/systemval enablessh 1", "/usr/sbin/sshd",
+        "/usr/trimui/bin/systemval enablessh 0", "killall -9 sshd",
+        "(empty - no password)", "/mnt/SDCARD/.userdata/tg5050", NULL, NULL, VERSION_NONE,
+    };
+    static const ssh_platform_config my355 = {
+        "pidof dropbear > /dev/null 2>&1",
+        "/etc/init.d/S50dropbear start", NULL,
+        "/etc/init.d/S50dropbear stop", "killall dropbear",
+        "rockchip", "/mnt/SDCARD/.userdata/my355", "/usr/miyoo/version", "20250228", VERSION_DATE,
+    };
+    static const ssh_platform_config h700 = {
+        "pidof dropbear > /dev/null 2>&1",
+        "dropbear -r /data/dropbear/dropbear_rsa_host_key -r /data/dropbear/dropbear_ed25519_host_key -B", NULL,
+        "true", "killall dropbear",
+        "root", "/mnt/SDCARD/.userdata/h700", NULL, NULL, VERSION_NONE,
+    };
+    static const ssh_platform_config mac = {
+        "pgrep -x sshd > /dev/null 2>&1",
+        NULL, NULL, NULL, NULL,
+        "tina", NULL, NULL, NULL, VERSION_NONE,
+    };
+
+    switch (ap_get_platform()) {
+        case AP_PLATFORM_TG5040: return &tg5040;
+        case AP_PLATFORM_TG5050: return &tg5050;
+        case AP_PLATFORM_MY355:  return &my355;
+        case AP_PLATFORM_H700:   return &h700;
+        case AP_PLATFORM_MACOS:  return &mac;
+        default:                 return NULL;
+    }
+}
+
+static const ssh_platform_config *g_platform;
 
 #define SSH_PORT "22"
 
-#if !defined(PLATFORM_MAC)
-    #if defined(PLATFORM_TG5040)
-        #define DEVICE_USERDATA_ROOT_FALLBACK "/mnt/SDCARD/.userdata/tg5040"
-    #elif defined(PLATFORM_TG5050)
-        #define DEVICE_USERDATA_ROOT_FALLBACK "/mnt/SDCARD/.userdata/tg5050"
-    #elif defined(PLATFORM_MY355)
-        #define DEVICE_USERDATA_ROOT_FALLBACK "/mnt/SDCARD/.userdata/my355"
-    #else
-        #define DEVICE_USERDATA_ROOT_FALLBACK "/mnt/SDCARD/.userdata"
-    #endif
-
-    #define SHARED_USERDATA_ROOT_FALLBACK "/mnt/SDCARD/.userdata/shared"
-    #define SSH_STATE_DIR_NAME            "nativessh"
-    #define SSH_STATE_ENABLED             "enabled\n"
-    #define SSH_STATE_DISABLED            "disabled\n"
-    #define SSH_AUTO_MARKER_BEGIN         "# >>> nativessh-managed >>>\n"
-    #define SSH_AUTO_MARKER_END           "# <<< nativessh-managed <<<\n"
-#endif
+#define SHARED_USERDATA_ROOT_FALLBACK "/mnt/SDCARD/.userdata/shared"
+#define SSH_STATE_DIR_NAME            "nativessh"
+#define SSH_STATE_ENABLED             "enabled\n"
+#define SSH_STATE_DISABLED            "disabled\n"
+#define SSH_AUTO_MARKER_BEGIN         "# >>> nativessh-managed >>>\n"
+#define SSH_AUTO_MARKER_END           "# <<< nativessh-managed <<<\n"
 
 /* ---------------------------------------------------------------------------
  * SSH status
  * ------------------------------------------------------------------------- */
 
 static bool is_ssh_running(void) {
-    return system(SSH_CHECK_CMD) == 0;
+    return system(g_platform->check_cmd) == 0;
 }
 
-#if !defined(PLATFORM_MAC)
 static const char *get_env_or_default(const char *name, const char *fallback) {
     const char *value = getenv(name);
     return (value && *value) ? value : fallback;
@@ -118,7 +119,7 @@ static bool build_state_file(char *buf, size_t buflen) {
 
 static bool build_auto_path(char *buf, size_t buflen) {
     return snprintf(buf, buflen, "%s/auto.sh",
-        get_env_or_default("USERDATA_PATH", DEVICE_USERDATA_ROOT_FALLBACK)) < (int)buflen;
+        get_env_or_default("USERDATA_PATH", g_platform->userdata_root)) < (int)buflen;
 }
 
 static int ensure_dir_exists(const char *path) {
@@ -208,6 +209,8 @@ static char *read_text_file_or_empty(const char *path, size_t *out_len) {
     long file_size;
 
     if (!file) {
+        if (errno != ENOENT)
+            return NULL;
         buffer = malloc(1);
         if (!buffer)
             return NULL;
@@ -253,8 +256,9 @@ static char *read_text_file_or_empty(const char *path, size_t *out_len) {
 static int upsert_auto_block(void) {
     char auto_path[PATH_MAX];
     char state_path[PATH_MAX];
-    char block[(PATH_MAX * 2) + 512];
-    const char *start_cmd = SSH_START_CMD;
+    char quoted_state_path[PATH_MAX * 4];
+    char block[(PATH_MAX * 4) + 1024];
+    const char *start_cmd = g_platform->start_cmd;
     char start_line[256] = "";
     char *existing;
     char *begin;
@@ -271,6 +275,18 @@ static int upsert_auto_block(void) {
         !build_state_file(state_path, sizeof(state_path)))
         return -1;
 
+    /* Escape single quotes inside a shell single-quoted path. */
+    char *quoted = quoted_state_path;
+    for (const char *p = state_path; *p; ++p) {
+        if (*p == '\'') {
+            memcpy(quoted, "'\\''", 4);
+            quoted += 4;
+        } else {
+            *quoted++ = *p;
+        }
+    }
+    *quoted = '\0';
+
     if (start_cmd) {
         if (snprintf(start_line, sizeof(start_line), "    %s > /dev/null 2>&1\n", start_cmd) >= (int)sizeof(start_line))
             return -1;
@@ -278,7 +294,7 @@ static int upsert_auto_block(void) {
 
     block_len = (size_t)snprintf(block, sizeof(block),
         "%s"
-        "STATE_FILE=\"%s\"\n"
+        "STATE_FILE='%s'\n"
         "state=\"\"\n"
         "if [ -f \"$STATE_FILE\" ]; then\n"
         "    state=$(cat \"$STATE_FILE\" 2>/dev/null)\n"
@@ -292,11 +308,11 @@ static int upsert_auto_block(void) {
         "fi\n"
         "%s",
         SSH_AUTO_MARKER_BEGIN,
-        state_path,
-        SSH_ENABLE_CMD,
+        quoted_state_path,
+        g_platform->enable_cmd,
         start_line,
-        SSH_DISABLE_CMD,
-        SSH_STOP_CMD,
+        g_platform->disable_cmd,
+        g_platform->stop_cmd,
         SSH_AUTO_MARKER_END);
     if (block_len >= sizeof(block))
         return -1;
@@ -316,9 +332,10 @@ static int upsert_auto_block(void) {
         if (*end == '\n')
             ++end;
         suffix_len = existing_len - (size_t)(end - existing);
-    } else if (begin) {
-        prefix_len = (size_t)(begin - existing);
-        suffix_len = 0;
+    } else if (begin || strstr(existing, SSH_AUTO_MARKER_END)) {
+        /* An incomplete block has no safe replacement boundary. */
+        free(existing);
+        return -1;
     } else {
         prefix_len = existing_len;
         suffix_len = 0;
@@ -345,14 +362,14 @@ static int upsert_auto_block(void) {
     result = write_text_file_atomic(auto_path, new_content,
         prefix_len + extra_newline + block_len + suffix_len);
     if (result == 0)
-        chmod(auto_path, 0755);
+        result = chmod(auto_path, 0755);
 
     free(new_content);
     free(existing);
     return result;
 }
 
-static void persist_ssh_state(bool enable) {
+static int persist_ssh_state(bool enable) {
     char state_dir[PATH_MAX];
     char state_path[PATH_MAX];
     const char *state = enable ? SSH_STATE_ENABLED : SSH_STATE_DISABLED;
@@ -360,23 +377,25 @@ static void persist_ssh_state(bool enable) {
     if (!build_state_dir(state_dir, sizeof(state_dir)) ||
         !build_state_file(state_path, sizeof(state_path))) {
         fprintf(stderr, "Failed to resolve SSH persistence paths\n");
-        return;
+        return -1;
     }
 
     if (ensure_dir_exists(state_dir) != 0) {
         fprintf(stderr, "Failed to create SSH state directory: %s\n", state_dir);
-        return;
+        return -1;
     }
 
     if (write_text_file_atomic(state_path, state, strlen(state)) != 0) {
         fprintf(stderr, "Failed to write SSH state file: %s\n", state_path);
-        return;
+        return -1;
     }
 
-    if (upsert_auto_block() != 0)
+    if (upsert_auto_block() != 0) {
         fprintf(stderr, "Failed to update auto.sh for SSH persistence\n");
+        return -1;
+    }
+    return 0;
 }
-#endif
 
 /* ---------------------------------------------------------------------------
  * IP address detection
@@ -400,11 +419,9 @@ static bool get_ip_address(char *buf, size_t buflen) {
         if (!(ifa->ifa_flags & IFF_UP))
             continue;
 
-#if defined(PLATFORM_MAC)
         /* On macOS, prefer en* interfaces (Wi-Fi/Ethernet) */
-        if (strncmp(ifa->ifa_name, "en", 2) != 0)
+        if (ap_get_platform() == AP_PLATFORM_MACOS && strncmp(ifa->ifa_name, "en", 2) != 0)
             continue;
-#endif
 
         struct sockaddr_in *sa = (struct sockaddr_in *)ifa->ifa_addr;
         inet_ntop(AF_INET, &sa->sin_addr, buf, (socklen_t)buflen);
@@ -421,19 +438,18 @@ static bool get_ip_address(char *buf, size_t buflen) {
  * Version checking
  * ------------------------------------------------------------------------- */
 
-#if VERSION_FORMAT_DOT
 static int compare_dot_versions(const char *a, const char *b) {
     /* Compare dot-separated numeric versions (e.g. "1.0.1" vs "1.1.1") */
     const char *pa = a, *pb = b;
 
-    while (*pa || *pb) {
+    while ((*pa >= '0' && *pa <= '9') || (*pb >= '0' && *pb <= '9')) {
         long va = 0, vb = 0;
 
-        if (*pa) {
+        if (*pa >= '0' && *pa <= '9') {
             va = strtol(pa, (char **)&pa, 10);
             if (*pa == '.') pa++;
         }
-        if (*pb) {
+        if (*pb >= '0' && *pb <= '9') {
             vb = strtol(pb, (char **)&pb, 10);
             if (*pb == '.') pb++;
         }
@@ -443,11 +459,14 @@ static int compare_dot_versions(const char *a, const char *b) {
     }
     return 0;
 }
-#endif
 
-#if NEEDS_VERSION_CHECK
 static bool check_os_version(void) {
-    FILE *f = fopen(VERSION_FILE, "r");
+    FILE *f;
+
+    if (g_platform->version_format == VERSION_NONE)
+        return true;
+
+    f = fopen(g_platform->version_file, "r");
     if (!f)
         return true; /* can't read version, proceed anyway */
 
@@ -468,13 +487,10 @@ static bool check_os_version(void) {
 
     bool version_ok = true;
 
-#if VERSION_FORMAT_DOT
-    version_ok = compare_dot_versions(version, MIN_VERSION) >= 0;
-#elif VERSION_FORMAT_DATE
-    /* Version file contains YYYYMMDD... (e.g. "20250228101926").
-     * Compare first 8 characters against MIN_VERSION ("20250228"). */
-    version_ok = len >= 8 && strncmp(version, MIN_VERSION, 8) >= 0;
-#endif
+    if (g_platform->version_format == VERSION_DOT)
+        version_ok = compare_dot_versions(version, g_platform->min_version) >= 0;
+    else if (g_platform->version_format == VERSION_DATE)
+        version_ok = len >= 8 && strncmp(version, g_platform->min_version, 8) >= 0;
 
     if (!version_ok) {
         char msg[256];
@@ -482,7 +498,7 @@ static bool check_os_version(void) {
             "Firmware version %s detected.\n\n"
             "Native SSH requires version %s or higher.\n"
             "Please update your firmware.",
-            version, MIN_VERSION);
+            version, g_platform->min_version);
 
         ap_footer_item footer[] = {
             { .button = AP_BTN_B, .label = "Quit", .is_confirm = false },
@@ -501,7 +517,6 @@ static bool check_os_version(void) {
 
     return true;
 }
-#endif
 
 /* ---------------------------------------------------------------------------
  * SSH toggle (runs in background thread)
@@ -514,49 +529,41 @@ static void run_cmd(const char *cmd) {
 static int enable_ssh(void *userdata) {
     (void)userdata;
 
-#if defined(PLATFORM_MAC)
-    usleep(1000000);
-    return 0;
-#else
-    run_cmd(SSH_ENABLE_CMD);
-    run_cmd(SSH_START_CMD);
+    if (!ap_is_device()) {
+        usleep(1000000);
+        return 0;
+    }
 
-#if !defined(PLATFORM_MAC)
-    persist_ssh_state(true);
-#endif
+    run_cmd(g_platform->enable_cmd);
+    run_cmd(g_platform->start_cmd);
 
     /* Poll until running (up to 5 seconds) */
     for (int i = 0; i < 10; i++) {
         if (is_ssh_running())
-            return 0;
+            return persist_ssh_state(true);
         usleep(500000);
     }
-    return 0;
-#endif
+    return -1;
 }
 
 static int disable_ssh(void *userdata) {
     (void)userdata;
 
-#if defined(PLATFORM_MAC)
-    usleep(1000000);
-    return 0;
-#else
-    run_cmd(SSH_DISABLE_CMD);
-    run_cmd(SSH_STOP_CMD);
+    if (!ap_is_device()) {
+        usleep(1000000);
+        return 0;
+    }
 
-#if !defined(PLATFORM_MAC)
-    persist_ssh_state(false);
-#endif
+    run_cmd(g_platform->disable_cmd);
+    run_cmd(g_platform->stop_cmd);
 
     /* Poll until stopped (up to 5 seconds) */
     for (int i = 0; i < 10; i++) {
         if (!is_ssh_running())
-            return 0;
+            return persist_ssh_state(false);
         usleep(500000);
     }
-    return 0;
-#endif
+    return -1;
 }
 
 static void toggle_ssh(bool enable) {
@@ -564,7 +571,17 @@ static void toggle_ssh(bool enable) {
         .message = enable ? "Enabling SSH..." : "Disabling SSH...",
         .show_progress = false,
     };
-    ap_process_message(&opts, enable ? enable_ssh : disable_ssh, NULL);
+    if (ap_process_message(&opts, enable ? enable_ssh : disable_ssh, NULL) != 0) {
+        ap_footer_item footer = { .button = AP_BTN_B, .label = "Back" };
+        ap_message_opts error = {
+            .message = "Could not change SSH or save its startup setting.\n"
+                       "Check the current status and Native SSH log.",
+            .footer = &footer,
+            .footer_count = 1,
+        };
+        ap_confirm_result result;
+        ap_confirmation(&error, &result);
+    }
 }
 
 /* ---------------------------------------------------------------------------
@@ -595,7 +612,7 @@ static screen_action show_status_screen(bool ssh_running) {
         { .key = "IP",       .value = ip_buf },
         { .key = "Port",     .value = SSH_PORT },
         { .key = "Connect",  .value = connect_buf },
-        { .key = "Password", .value = SSH_DEFAULT_PASSWORD },
+        { .key = "Password", .value = g_platform->default_password },
     };
 
     ap_detail_section status_section = {
@@ -684,11 +701,17 @@ int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
 
+    g_platform = platform_config();
+    if (!g_platform) {
+        fprintf(stderr, "Unsupported platform: %s\n", ap_get_platform_name());
+        return 1;
+    }
+
     ap_config cfg = {0};
     cfg.window_title = "Native SSH";
-    cfg.font_path = AP_PLATFORM_IS_DEVICE ? NULL : "third_party/apostrophe/res/font.ttf";
+    cfg.font_path = ap_is_device() ? NULL : "third_party/apostrophe/res/font.ttf";
     cfg.log_path = ap_resolve_log_path("nativessh");
-    cfg.is_nextui = AP_PLATFORM_IS_DEVICE;
+    cfg.is_nextui = ap_is_device();
     cfg.cpu_speed = AP_CPU_SPEED_MENU;
 
     if (ap_init(&cfg) != AP_OK) {
@@ -696,12 +719,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-#if NEEDS_VERSION_CHECK
     if (!check_os_version()) {
         ap_quit();
         return 0;
     }
-#endif
 
     run_app();
     ap_quit();

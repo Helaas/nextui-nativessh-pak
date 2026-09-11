@@ -1,0 +1,69 @@
+name: Build
+
+# Builds the universal app and packages NativeSSH.pak.zip, the single archive
+# Pak Store installs on tg5040, tg5050, my355, and h700.
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      version:
+        description: Version string read from pak.json
+        value: ${{ jobs.universal.outputs.version }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  universal:
+    name: Universal app (NativeSSH.pak.zip)
+    # arm64 runs the same linux/arm64 variant of the pinned toolchain image as
+    # local builds on Apple Silicon. Free for public repositories.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Read version from pak.json
+        id: meta
+        run: |
+          version="$(jq -er '.version | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' pak.json)"
+          jq -e --arg v "$version" '.release_filename == "NativeSSH.pak.zip" and (.changelog[$v] | type == "string" and length > 0)' pak.json >/dev/null
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building NativeSSH $version"
+
+      # make package checks the packaged binary and root-content ZIP layout.
+      - name: Build and package
+        run: |
+          make package
+          unzip -t build/release/all/NativeSSH.pak.zip
+          sh tests/deploy.sh
+
+      - name: Summarize package
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### NativeSSH $VERSION"
+            echo '```'
+            unzip -Z1 build/release/all/NativeSSH.pak.zip | sort
+            echo
+            sha256sum build/universal/nativessh build/release/all/NativeSSH.pak.zip
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload NativeSSH.pak.zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: NativeSSH-pak-zip
+          path: build/release/all/NativeSSH.pak.zip
+          if-no-files-found: error

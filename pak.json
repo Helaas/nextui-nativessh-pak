@@ -1,12 +1,13 @@
 {
-  "name": "Native SSH",
-  "version": "v2.1.0",
+  "name": "NativeSSH",
+  "version": "v2.2.0",
   "type": "TOOL",
   "description": "Enable and disable SSH access on your device. Displays default IP address and port when SSH is active.",
   "author": "Helaas",
   "repo_url": "https://github.com/Helaas/nextui-nativessh-pak",
-  "release_filename": "NativeSSH.pakz",
+  "release_filename": "NativeSSH.pak.zip",
   "changelog": {
+    "v2.2.0": "Adds H700 support and one universal NativeSSH.pak.zip for all supported devices. Updates Apostrophe to v1.2.0, protects startup scripts, fixes firmware version parsing, and reports SSH toggle and persistence failures.",
     "v2.1.0": "Fixes incorrect colors with NextUI's RGBA theme format.",
     "v2.0.0": "Add Miyoo Flip support. Major rework porting to app from Gabagool to Apostrophe.",
     "v1.0.0": "Initial release"
@@ -14,6 +15,7 @@
   "platforms": [
     "tg5040",
     "tg5050",
-    "my355"
+    "my355",
+    "h700"
   ]
 }
