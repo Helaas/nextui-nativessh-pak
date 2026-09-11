@@ -3,6 +3,7 @@
 # ──────────────────────────────────────────────────────────────
 
 SHELL := /bin/bash
+.DEFAULT_GOAL := all
 
 APP_NAME := nativessh
 PAK_NAME := NativeSSH
@@ -22,7 +23,7 @@ COMMON_INCLUDES := -I$(APOSTROPHE_DIR)/include
 
 .PHONY: all native mac run-mac run-native universal tg5040 tg5050 my355 \
 	package package-universal package-matrix package-tg5040 package-tg5050 package-my355 do-package \
-	deploy deploy-platform clean help
+	deploy deploy-platform test clean help
 
 # ── Default target ──────────────────────────────────────────
 
@@ -45,6 +46,15 @@ mac: $(APOSTROPHE_DIR)/include/apostrophe.h
 
 run-mac: mac
 	./$(BUILD_DIR)/mac/$(APP_NAME)
+
+test:
+	@mkdir -p $(BUILD_DIR)/tests
+	cc -std=gnu11 -O0 -g -DPLATFORM_MAC $(COMMON_INCLUDES) \
+		$(shell pkg-config --cflags sdl2 SDL2_ttf SDL2_image) \
+		-o $(BUILD_DIR)/tests/regression tests/regression.c \
+		$(shell pkg-config --libs sdl2 SDL2_ttf SDL2_image) -lm -lpthread
+	./$(BUILD_DIR)/tests/regression
+	sh tests/deploy.sh
 
 # ── Docker cross-compilation ────────────────────────────────
 
@@ -168,7 +178,7 @@ deploy-platform:
 		exit 1; \
 	fi
 	@$(MAKE) package-universal
-	@ADB_CMD="$(ADB) -s $(SERIAL)"; \
+	@set -e; ADB_CMD="$(ADB) -s $(SERIAL)"; \
 	PAK_ROOT="/mnt/SDCARD/Tools/$(PLATFORM)"; \
 	PAK_DIR="$$PAK_ROOT/$(PAK_NAME).pak"; \
 	echo "Deploying $(PAK_NAME).pak to $$PAK_DIR..."; \
@@ -197,4 +207,5 @@ help:
 	@echo "  package       Build the platform-neutral Pak Store archive"
 	@echo "  package-matrix  Build the legacy three-toolchain regression matrix"
 	@echo "  deploy        Detect adb platform, package, and push"
+	@echo "  test          Run local persistence, version, and deployment checks"
 	@echo "  clean         Remove build artifacts"

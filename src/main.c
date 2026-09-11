@@ -209,6 +209,8 @@ static char *read_text_file_or_empty(const char *path, size_t *out_len) {
     long file_size;
 
     if (!file) {
+        if (errno != ENOENT)
+            return NULL;
         buffer = malloc(1);
         if (!buffer)
             return NULL;
@@ -254,7 +256,8 @@ static char *read_text_file_or_empty(const char *path, size_t *out_len) {
 static int upsert_auto_block(void) {
     char auto_path[PATH_MAX];
     char state_path[PATH_MAX];
-    char block[(PATH_MAX * 2) + 512];
+    char quoted_state_path[PATH_MAX * 4];
+    char block[(PATH_MAX * 4) + 1024];
     const char *start_cmd = g_platform->start_cmd;
     char start_line[256] = "";
     char *existing;
@@ -272,6 +275,18 @@ static int upsert_auto_block(void) {
         !build_state_file(state_path, sizeof(state_path)))
         return -1;
 
+    /* Escape single quotes inside a shell single-quoted path. */
+    char *quoted = quoted_state_path;
+    for (const char *p = state_path; *p; ++p) {
+        if (*p == '\'') {
+            memcpy(quoted, "'\\''", 4);
+            quoted += 4;
+        } else {
+            *quoted++ = *p;
+        }
+    }
+    *quoted = '\0';
+
     if (start_cmd) {
         if (snprintf(start_line, sizeof(start_line), "    %s > /dev/null 2>&1\n", start_cmd) >= (int)sizeof(start_line))
             return -1;
@@ -279,7 +294,7 @@ static int upsert_auto_block(void) {
 
     block_len = (size_t)snprintf(block, sizeof(block),
         "%s"
-        "STATE_FILE=\"%s\"\n"
+        "STATE_FILE='%s'\n"
         "state=\"\"\n"
         "if [ -f \"$STATE_FILE\" ]; then\n"
         "    state=$(cat \"$STATE_FILE\" 2>/dev/null)\n"
@@ -293,7 +308,7 @@ static int upsert_auto_block(void) {
         "fi\n"
         "%s",
         SSH_AUTO_MARKER_BEGIN,
-        state_path,
+        quoted_state_path,
         g_platform->enable_cmd,
         start_line,
         g_platform->disable_cmd,
@@ -317,9 +332,10 @@ static int upsert_auto_block(void) {
         if (*end == '\n')
             ++end;
         suffix_len = existing_len - (size_t)(end - existing);
-    } else if (begin) {
-        prefix_len = (size_t)(begin - existing);
-        suffix_len = 0;
+    } else if (begin || strstr(existing, SSH_AUTO_MARKER_END)) {
+        /* An incomplete block has no safe replacement boundary. */
+        free(existing);
+        return -1;
     } else {
         prefix_len = existing_len;
         suffix_len = 0;
@@ -346,14 +362,14 @@ static int upsert_auto_block(void) {
     result = write_text_file_atomic(auto_path, new_content,
         prefix_len + extra_newline + block_len + suffix_len);
     if (result == 0)
-        chmod(auto_path, 0755);
+        result = chmod(auto_path, 0755);
 
     free(new_content);
     free(existing);
     return result;
 }
 
-static void persist_ssh_state(bool enable) {
+static int persist_ssh_state(bool enable) {
     char state_dir[PATH_MAX];
     char state_path[PATH_MAX];
     const char *state = enable ? SSH_STATE_ENABLED : SSH_STATE_DISABLED;
@@ -361,21 +377,24 @@ static void persist_ssh_state(bool enable) {
     if (!build_state_dir(state_dir, sizeof(state_dir)) ||
         !build_state_file(state_path, sizeof(state_path))) {
         fprintf(stderr, "Failed to resolve SSH persistence paths\n");
-        return;
+        return -1;
     }
 
     if (ensure_dir_exists(state_dir) != 0) {
         fprintf(stderr, "Failed to create SSH state directory: %s\n", state_dir);
-        return;
+        return -1;
     }
 
     if (write_text_file_atomic(state_path, state, strlen(state)) != 0) {
         fprintf(stderr, "Failed to write SSH state file: %s\n", state_path);
-        return;
+        return -1;
     }
 
-    if (upsert_auto_block() != 0)
+    if (upsert_auto_block() != 0) {
         fprintf(stderr, "Failed to update auto.sh for SSH persistence\n");
+        return -1;
+    }
+    return 0;
 }
 
 /* ---------------------------------------------------------------------------
@@ -423,14 +442,14 @@ static int compare_dot_versions(const char *a, const char *b) {
     /* Compare dot-separated numeric versions (e.g. "1.0.1" vs "1.1.1") */
     const char *pa = a, *pb = b;
 
-    while (*pa || *pb) {
+    while ((*pa >= '0' && *pa <= '9') || (*pb >= '0' && *pb <= '9')) {
         long va = 0, vb = 0;
 
-        if (*pa) {
+        if (*pa >= '0' && *pa <= '9') {
             va = strtol(pa, (char **)&pa, 10);
             if (*pa == '.') pa++;
         }
-        if (*pb) {
+        if (*pb >= '0' && *pb <= '9') {
             vb = strtol(pb, (char **)&pb, 10);
             if (*pb == '.') pb++;
         }
@@ -518,15 +537,13 @@ static int enable_ssh(void *userdata) {
     run_cmd(g_platform->enable_cmd);
     run_cmd(g_platform->start_cmd);
 
-    persist_ssh_state(true);
-
     /* Poll until running (up to 5 seconds) */
     for (int i = 0; i < 10; i++) {
         if (is_ssh_running())
-            return 0;
+            return persist_ssh_state(true);
         usleep(500000);
     }
-    return 0;
+    return -1;
 }
 
 static int disable_ssh(void *userdata) {
@@ -540,15 +557,13 @@ static int disable_ssh(void *userdata) {
     run_cmd(g_platform->disable_cmd);
     run_cmd(g_platform->stop_cmd);
 
-    persist_ssh_state(false);
-
     /* Poll until stopped (up to 5 seconds) */
     for (int i = 0; i < 10; i++) {
         if (!is_ssh_running())
-            return 0;
+            return persist_ssh_state(false);
         usleep(500000);
     }
-    return 0;
+    return -1;
 }
 
 static void toggle_ssh(bool enable) {
@@ -556,7 +571,17 @@ static void toggle_ssh(bool enable) {
         .message = enable ? "Enabling SSH..." : "Disabling SSH...",
         .show_progress = false,
     };
-    ap_process_message(&opts, enable ? enable_ssh : disable_ssh, NULL);
+    if (ap_process_message(&opts, enable ? enable_ssh : disable_ssh, NULL) != 0) {
+        ap_footer_item footer = { .button = AP_BTN_B, .label = "Back" };
+        ap_message_opts error = {
+            .message = "Could not change SSH or save its startup setting.\n"
+                       "Check the current status and Native SSH log.",
+            .footer = &footer,
+            .footer_count = 1,
+        };
+        ap_confirm_result result;
+        ap_confirmation(&error, &result);
+    }
 }
 
 /* ---------------------------------------------------------------------------

@@ -67,6 +67,9 @@ git submodule update --init
 # Build for macOS (development)
 make mac
 
+# Run local regression checks (uses the macOS prerequisites above)
+make test
+
 # Build one binary for every supported NextUI device
 make universal
 make all
@@ -104,6 +107,14 @@ make help
 3. Launch from the NextUI Tools menu
 
 Or deploy directly via ADB: `make deploy`
+
+## Automated Releases
+
+Pull requests and manual Build runs produce `NativeSSH.pak.zip` as a workflow artifact.
+After a push to `main`, the Release workflow builds the same package and publishes
+a GitHub Release using the version and changelog in `pak.json`. An existing release
+for that version is left unchanged. To release an update, bump `version`, add its
+changelog entry, and merge to `main`; keep `release_filename` as `NativeSSH.pak.zip`.
 
 ## Acknowledgements
 
